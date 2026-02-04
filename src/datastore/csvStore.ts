@@ -3,7 +3,9 @@ import path from "path";
 import { parse } from "csv-parse/sync";
 import { stringify } from "csv-stringify/sync";
 
-const CSV_PATH = path.join(__dirname, "../data/cognito_sense_master.csv");
+const CSV_PATH = path.join(process.cwd(), "data", "cognito_sense_master.csv");
+console.log("🔥 csvStore.ts loaded");
+console.log("📁 CSV PATH =", path.join(process.cwd(), "data", "cognito_sense_master.csv"));
 
 export const HEADERS = [
   "user_id",
@@ -37,12 +39,23 @@ function readRows(): any[] {
 }
 
 function writeRows(rows: any[]) {
-  const output = stringify(rows, {
+  // ✅ Ensure all headers exist in every row
+  const normalizedRows = rows.map((row) => {
+    const newRow: any = {};
+    HEADERS.forEach((h) => {
+      newRow[h] = row[h] ?? ""; // fill missing fields
+    });
+    return newRow;
+  });
+
+  const output = stringify(normalizedRows, {
     header: true,
     columns: HEADERS,
   });
+
   fs.writeFileSync(CSV_PATH, output);
 }
+
 
 /* ================= QUESTIONNAIRE ================= */
 
@@ -58,7 +71,7 @@ export function saveQuestionnaire(data: {
   const now = new Date().toISOString();
 
   let row = rows.find((r) => r.user_id === data.userId);
-
+  
   if (!row) {
     row = {
       user_id: data.userId,
@@ -116,23 +129,35 @@ export function saveGameResult(params: {
   writeRows(rows);
 }
 
-/* ================= EYE-TRACKING ================= */
-
 export function updateEyeTrackingCSV(userId: string, eyeTrackingResult: any) {
-  const rows = readRows(); // ✅ use your existing parser
+  const rows = readRows();
   const now = new Date().toISOString();
 
-  const row = rows.find((r) => r.user_id === userId);
+  const row = rows.find((r) => String(r.user_id).trim() === String(userId).trim());
 
   if (!row) {
     console.log("❌ User not found in CSV:", userId);
     return;
   }
 
-  row.eye_tracking_response = JSON.stringify(eyeTrackingResult);
+  const eyeData = {
+    metrics: eyeTrackingResult.metrics,
+    trials: eyeTrackingResult.trials,
+    timestamp: now,
+  };
+
+  const jsonResponse = JSON.stringify(eyeData);
+
+  // ✅ PRINT WHAT WILL BE SAVED IN CSV
+  console.log("🧠 Eye Tracking Data to be saved:");
+  console.log(jsonResponse);               // full JSON
+  console.log("📏 JSON length:", jsonResponse.length);
+
+  row.eye_tracking_response = jsonResponse;
   row.last_updated = now;
 
-  writeRows(rows); // ✅ safe stringify
+  writeRows(rows);
 
   console.log("✅ Eye tracking data written to CSV");
 }
+

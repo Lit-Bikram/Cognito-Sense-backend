@@ -32,25 +32,26 @@ function tryFinalizeRow(userId: string) {
   if (!data) return;
 
   // Only finalize when ALL THREE are present
-  if (
-    data.questionnaire &&
-    data.games &&
-    data.eyeTracking
-  ) {
+  if (data.questionnaire && data.games && data.eyeTracking) {
     const now = new Date().toISOString();
+
+    function csvSafe(json: any) {
+      const text = JSON.stringify(json);
+      return `"${text.replace(/"/g, '""')}"`; // <-- CSV safe format
+    }
 
     const row = [
       userId,
       data.email,
       data.name,
-      JSON.stringify(data.questionnaire),
-      JSON.stringify(data.games),
-      JSON.stringify(data.eyeTracking),
+      csvSafe(data.questionnaire),
+      csvSafe(data.games),
+      csvSafe(data.eyeTracking),
       data.q_total_score,
       data.target_risk_class,
       data.q_completed_at,
       data.created_at || now,
-      now, // last_updated
+      now,
     ].join(",");
 
     // Save locally
@@ -69,7 +70,11 @@ function tryFinalizeRow(userId: string) {
 
 app.get("/api/view-csv", (req, res) => {
   try {
-    const csvPath = path.join(process.cwd(), "data", "cognito_sense_master.csv");
+    const csvPath = path.join(
+      process.cwd(),
+      "data",
+      "cognito_sense_master.csv",
+    );
 
     if (!fs.existsSync(csvPath)) {
       return res.status(404).json({
@@ -81,7 +86,7 @@ app.get("/api/view-csv", (req, res) => {
     res.setHeader("Content-Type", "text/csv");
     res.setHeader(
       "Content-Disposition",
-      "inline; filename=cognito_sense_master.csv"
+      "inline; filename=cognito_sense_master.csv",
     );
 
     const fileData = fs.readFileSync(csvPath, "utf8");

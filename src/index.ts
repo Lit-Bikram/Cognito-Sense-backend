@@ -15,6 +15,17 @@ app.use("/api/questionnaire", questionnaireRoute);
 app.use("/api/game", gameRoutes);
 app.use("/api/eye-tracking", eyeTrackingRoute);
 
+app.get("/api/view-csv", (req, res) => {
+  const fs = require("fs");
+  const path = require("path");
+
+  const csvPath = path.join(__dirname, "data.csv");
+
+  res.setHeader("Content-Type", "text/csv");
+  res.send(fs.readFileSync(csvPath, "utf8"));
+});
+
+
 // ✅ Health check (optional but useful)
 app.get("/", (req, res) => {
   res.send("✅ CognitoSense Backend is Running");

@@ -50,7 +50,5 @@ app.get("/", (req, res) => {
 const PORT = 4000;
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("✅ Backend running on:");
-  // console.log(`➡ http://localhost:${PORT}`);
-  // console.log(`➡ http://192.168.1.2:${PORT}`);
+  console.log("✅ Backend running:");
 });

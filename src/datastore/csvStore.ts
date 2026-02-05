@@ -101,7 +101,7 @@ export function saveQuestionnaire(data: {
 
 export function saveGameResult(params: {
   userId: string;
-  gameKey: string;   // allow any string from frontend
+  gameKey: string;
   gameResult: any;
 }) {
   const rows = readRows();
@@ -110,19 +110,21 @@ export function saveGameResult(params: {
   const row = rows.find((r) => r.user_id === params.userId);
   if (!row) throw new Error("User not found");
 
-  // 👉 Give TypeScript an index signature
-  let games: Record<string, any> = {
+  // ✅ STEP 1 — DEFAULT STRUCTURE (only used if no data exists yet)
+  const defaultGames: Record<string, any> = {
     laundry_sorter: null,
     memory_dialer: null,
     money_manager: null,
     shopping_list_recall: null,
   };
 
-  if (row.games_response) {
-    games = JSON.parse(row.games_response);
-  }
+  // ✅ STEP 2 — LOAD EXISTING DATA IF PRESENT
+  let games: Record<string, any> =
+    row.games_response && row.games_response.trim() !== ""
+      ? JSON.parse(row.games_response)
+      : { ...defaultGames };
 
-  // 🔥 Normalize game keys from frontend
+  // ✅ STEP 3 — NORMALIZE KEYS FROM FRONTEND
   const normalizedKey =
     params.gameKey === "shopping_list"
       ? "shopping_list_recall"
@@ -130,14 +132,18 @@ export function saveGameResult(params: {
       ? "memory_dialer"
       : params.gameKey;
 
-  // ✅ Now TypeScript is happy
+  // ✅ STEP 4 — UPDATE ONLY THIS GAME (preserve others)
   games[normalizedKey] = params.gameResult;
 
+  // ✅ STEP 5 — SAVE BACK TO CSV
   row.games_response = JSON.stringify(games);
   row.last_updated = now;
 
   writeRows(rows);
+
+  console.log("🎮 Games after update:", games);
 }
+
 
 
 export function updateEyeTrackingCSV(userId: string, eyeTrackingResult: any) {

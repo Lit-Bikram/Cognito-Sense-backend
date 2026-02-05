@@ -150,32 +150,29 @@ export function updateEyeTrackingCSV(userId: string, eyeTrackingResult: any) {
   const rows = readRows();
   const now = new Date().toISOString();
 
-  const row = rows.find((r) => String(r.user_id).trim() === String(userId).trim());
+  // 🔥 VERY IMPORTANT: FIND EXISTING ROW ONLY
+  const row = rows.find(
+    (r) => String(r.user_id).trim() === String(userId).trim()
+  );
 
   if (!row) {
     console.log("❌ User not found in CSV:", userId);
     return;
   }
 
+  // ✅ BUILD EYE DATA
   const eyeData = {
     metrics: eyeTrackingResult.metrics,
     trials: eyeTrackingResult.trials,
     timestamp: now,
   };
 
-  const jsonResponse = JSON.stringify(eyeData);
-
-  // ✅ PRINT WHAT WILL BE SAVED IN CSV
-  console.log("🧠 Eye Tracking Data to be saved:");
-  console.log(jsonResponse);               // full JSON
-  console.log("📏 JSON length:", jsonResponse.length);
-
-  row.eye_tracking_response = jsonResponse;
+  row.eye_tracking_response = JSON.stringify(eyeData);
   row.last_updated = now;
 
   writeRows(rows);
 
-  console.log("✅ Eye tracking data written to CSV");
+  console.log("✅ Eye tracking UPDATED EXISTING ROW for user:", userId);
 }
 
 export function isRowComplete(userId: string) {

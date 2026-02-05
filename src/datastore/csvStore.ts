@@ -29,7 +29,7 @@ function ensureCSV() {
   }
 }
 
-function readRows(): any[] {
+export function readRows(): any[] {
   ensureCSV();
   const content = fs.readFileSync(CSV_PATH, "utf-8");
   return parse(content, {

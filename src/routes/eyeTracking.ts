@@ -1,5 +1,9 @@
 import express from "express";
-import { updateEyeTrackingCSV, isRowComplete } from "../datastore/csvStore";
+import {
+  updateEyeTrackingCSV,
+  isRowComplete,
+  readRows,
+} from "../datastore/csvStore";
 import { appendRowToDriveCSV } from "../googleDrive";
 
 const router = express.Router();
@@ -14,22 +18,24 @@ router.post("/", async (req, res) => {
 
     console.log("👁️ Eye-tracking API hit for:", userId);
 
-    // ✅ STEP 1 — Update the EXISTING row only (never create a new one)
+    // 1️⃣ Update existing CSV row (NO new rows)
     updateEyeTrackingCSV(userId, eyeTrackingResult);
 
-    // ✅ STEP 2 — Check if the row is now FULLY COMPLETE
-    const rows = require("../datastore/csvStore").readRows?.() || [];
-    const row = rows.find((r: any) => r.user_id === userId);
+    // 2️⃣ Re-read the SAME CSV file from disk
+    const rows = readRows();
+    const row = rows.find(
+      (r: any) => String(r.user_id).trim() === String(userId).trim()
+    );
 
     if (!row) {
-      console.log("⚠️ No CSV row found for user:", userId);
+      console.log("⚠️ Still no CSV row found for:", userId);
       return res.json({ success: true, note: "Row not found yet" });
     }
 
+    // 3️⃣ If everything is complete → send to Drive
     if (isRowComplete(userId)) {
       console.log("✅ FULL ROW COMPLETE — uploading to Drive...");
 
-      // Convert CSV row into a single line for Drive
       const csvLine = [
         row.user_id,
         row.email,

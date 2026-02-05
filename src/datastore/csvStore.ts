@@ -101,7 +101,7 @@ export function saveQuestionnaire(data: {
 
 export function saveGameResult(params: {
   userId: string;
-  gameKey: "laundry_sorter" | "memory_dialer" | "money_manager" | "shopping_list_recall";
+  gameKey: string;   // allow any string from frontend
   gameResult: any;
 }) {
   const rows = readRows();
@@ -110,7 +110,8 @@ export function saveGameResult(params: {
   const row = rows.find((r) => r.user_id === params.userId);
   if (!row) throw new Error("User not found");
 
-  let games = {
+  // 👉 Give TypeScript an index signature
+  let games: Record<string, any> = {
     laundry_sorter: null,
     memory_dialer: null,
     money_manager: null,
@@ -121,13 +122,23 @@ export function saveGameResult(params: {
     games = JSON.parse(row.games_response);
   }
 
-  games[params.gameKey] = params.gameResult;
+  // 🔥 Normalize game keys from frontend
+  const normalizedKey =
+    params.gameKey === "shopping_list"
+      ? "shopping_list_recall"
+      : params.gameKey === "memory_dialer_game"
+      ? "memory_dialer"
+      : params.gameKey;
+
+  // ✅ Now TypeScript is happy
+  games[normalizedKey] = params.gameResult;
 
   row.games_response = JSON.stringify(games);
   row.last_updated = now;
 
   writeRows(rows);
 }
+
 
 export function updateEyeTrackingCSV(userId: string, eyeTrackingResult: any) {
   const rows = readRows();
@@ -161,3 +172,19 @@ export function updateEyeTrackingCSV(userId: string, eyeTrackingResult: any) {
   console.log("✅ Eye tracking data written to CSV");
 }
 
+export function isRowComplete(userId: string) {
+  const rows = readRows();
+  const row = rows.find((r) => r.user_id === userId);
+  if (!row) return false;
+
+  const games = row.games_response ? JSON.parse(row.games_response) : {};
+
+  return (
+    !!row.questionnaire_response &&
+    !!row.eye_tracking_response &&
+    !!games.laundry_sorter &&
+    !!games.memory_dialer &&
+    !!games.money_manager &&
+    !!games.shopping_list_recall
+  );
+}

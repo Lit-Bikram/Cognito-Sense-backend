@@ -8,6 +8,18 @@ import { appendRowToDriveCSV } from "../googleDrive";
 
 const router = express.Router();
 
+/* --------- IMPORTANT: CSV SAFE HELPER --------- */
+function csvSafe(value: any) {
+  // If the value is already a JSON string, keep it;
+  // otherwise stringify it.
+  const text =
+    typeof value === "string" ? value : JSON.stringify(value || {});
+
+  // Escape internal quotes and wrap the whole thing in quotes
+  return `"${text.replace(/"/g, '""')}"`;
+}
+/* ---------------------------------------------- */
+
 router.post("/", async (req, res) => {
   try {
     const { userId, eyeTrackingResult } = req.body;
@@ -18,10 +30,10 @@ router.post("/", async (req, res) => {
 
     console.log("👁️ Eye-tracking API hit for:", userId);
 
-    // 1️⃣ Update existing CSV row (NO new rows)
+    // 1️⃣ Update existing CSV row (NEVER create a new one)
     updateEyeTrackingCSV(userId, eyeTrackingResult);
 
-    // 2️⃣ Re-read the SAME CSV file from disk
+    // 2️⃣ Re-read the SAME CSV from disk
     const rows = readRows();
     const row = rows.find(
       (r: any) => String(r.user_id).trim() === String(userId).trim()
@@ -32,7 +44,7 @@ router.post("/", async (req, res) => {
       return res.json({ success: true, note: "Row not found yet" });
     }
 
-    // 3️⃣ If everything is complete → send to Drive
+    // 3️⃣ If everything is complete → upload to Drive
     if (isRowComplete(userId)) {
       console.log("✅ FULL ROW COMPLETE — uploading to Drive...");
 
@@ -40,9 +52,9 @@ router.post("/", async (req, res) => {
         row.user_id,
         row.email,
         row.name,
-        row.questionnaire_response,
-        row.games_response,
-        row.eye_tracking_response,
+        csvSafe(row.questionnaire_response),
+        csvSafe(row.games_response),
+        csvSafe(row.eye_tracking_response),
         row.q_total_score,
         row.target_risk_class,
         row.q_completed_at,

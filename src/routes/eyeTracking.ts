@@ -72,16 +72,48 @@ router.post("/", async (req, res) => {
       );
       res.json({ success: true, uploadedToDrive: true });
     } else {
-      // 👉 NEW: Tell frontend what is missing
-      const missing = [];
+      const missing: string[] = [];
 
-      // 👉 Treat "{}" or empty string as missing
-      const isEmpty = (val: any) =>
-        !val || val === "{}" || val === "" || val === "[]";
+      // --- 1) Questionnaire ---
+      if (
+        !row.questionnaire_response ||
+        row.questionnaire_response.trim() === ""
+      ) {
+        missing.push("Questionnaire");
+      }
 
-      if (isEmpty(row.questionnaire_response)) missing.push("Questionnaire");
-      if (isEmpty(row.games_response)) missing.push("Games");
-      if (isEmpty(row.eye_tracking_response)) missing.push("Eye Tracking");
+      // --- 2) Eye Tracking ---
+      if (
+        !row.eye_tracking_response ||
+        row.eye_tracking_response.trim() === ""
+      ) {
+        missing.push("Eye Tracking");
+      }
+
+      // --- 3) GAMES → must PARSE JSON ---
+      let gamesIncomplete = false;
+      try {
+        const games = JSON.parse(row.games_response || "{}");
+
+        const gameKeys = [
+          "laundry_sorter",
+          "memory_dialer",
+          "money_manager",
+          "shopping_list_recall",
+        ];
+
+        const unfinished = gameKeys.filter(
+          (k) => games[k] === null || games[k] === undefined,
+        );
+
+        if (unfinished.length > 0) {
+          gamesIncomplete = true;
+          missing.push("Games (" + unfinished.join(", ") + ")");
+        }
+      } catch (err) {
+        console.warn("Could not parse games_response:", err);
+        missing.push("Games (corrupt data)");
+      }
 
       console.log("⏳ Incomplete — missing:", missing);
 

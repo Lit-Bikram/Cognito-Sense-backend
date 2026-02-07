@@ -12,8 +12,7 @@ const router = express.Router();
 function csvSafe(value: any) {
   // If the value is already a JSON string, keep it;
   // otherwise stringify it.
-  const text =
-    typeof value === "string" ? value : JSON.stringify(value || {});
+  const text = typeof value === "string" ? value : JSON.stringify(value || {});
 
   // Escape internal quotes and wrap the whole thing in quotes
   return `"${text.replace(/"/g, '""')}"`;
@@ -36,7 +35,7 @@ router.post("/", async (req, res) => {
     // 2️⃣ Re-read the SAME CSV from disk
     const rows = readRows();
     const row = rows.find(
-      (r: any) => String(r.user_id).trim() === String(userId).trim()
+      (r: any) => String(r.user_id).trim() === String(userId).trim(),
     );
 
     if (!row) {
@@ -67,7 +66,27 @@ router.post("/", async (req, res) => {
       console.log("⏳ Row not complete yet — skipping Drive upload");
     }
 
-    res.json({ success: true });
+    if (isRowComplete(userId)) {
+      console.log(
+        "📤 Data uploaded to Drive — sending confirmation to frontend",
+      );
+      res.json({ success: true, uploadedToDrive: true });
+    } else {
+      // 👉 NEW: Tell frontend what is missing
+      const missing = [];
+
+      if (!row.questionnaire_response) missing.push("Questionnaire");
+      if (!row.games_response) missing.push("Games");
+      if (!row.eye_tracking_response) missing.push("Eye Tracking");
+
+      console.log("⏳ Incomplete — missing:", missing);
+
+      res.json({
+        success: true,
+        uploadedToDrive: false,
+        missingTasks: missing,
+      });
+    }
   } catch (err) {
     console.error("❌ Eye tracking save error:", err);
     res.status(500).json({ error: "Server error" });

@@ -75,9 +75,13 @@ router.post("/", async (req, res) => {
       // 👉 NEW: Tell frontend what is missing
       const missing = [];
 
-      if (!row.questionnaire_response) missing.push("Questionnaire");
-      if (!row.games_response) missing.push("Games");
-      if (!row.eye_tracking_response) missing.push("Eye Tracking");
+      // 👉 Treat "{}" or empty string as missing
+      const isEmpty = (val: any) =>
+        !val || val === "{}" || val === "" || val === "[]";
+
+      if (isEmpty(row.questionnaire_response)) missing.push("Questionnaire");
+      if (isEmpty(row.games_response)) missing.push("Games");
+      if (isEmpty(row.eye_tracking_response)) missing.push("Eye Tracking");
 
       console.log("⏳ Incomplete — missing:", missing);
 

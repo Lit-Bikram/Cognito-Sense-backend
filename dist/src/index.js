@@ -3,6 +3,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const fs_1 = __importDefault(require("fs"));
@@ -30,22 +32,24 @@ function tryFinalizeRow(userId) {
     if (!data)
         return;
     // Only finalize when ALL THREE are present
-    if (data.questionnaire &&
-        data.games &&
-        data.eyeTracking) {
+    if (data.questionnaire && data.games && data.eyeTracking) {
         const now = new Date().toISOString();
+        function csvSafe(json) {
+            const text = JSON.stringify(json);
+            return `"${text.replace(/"/g, '""')}"`; // <-- CSV safe format
+        }
         const row = [
             userId,
             data.email,
             data.name,
-            JSON.stringify(data.questionnaire),
-            JSON.stringify(data.games),
-            JSON.stringify(data.eyeTracking),
+            csvSafe(data.questionnaire),
+            csvSafe(data.games),
+            csvSafe(data.eyeTracking),
             data.q_total_score,
             data.target_risk_class,
             data.q_completed_at,
             data.created_at || now,
-            now, // last_updated
+            now,
         ].join(",");
         // Save locally
         fs_1.default.appendFileSync(CSV_PATH, row + "\n");

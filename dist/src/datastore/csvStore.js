@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateEyeTrackingCSV = exports.saveGameResult = exports.saveQuestionnaire = exports.HEADERS = void 0;
+exports.isRowComplete = exports.updateEyeTrackingCSV = exports.saveGameResult = exports.saveQuestionnaire = exports.readRows = exports.HEADERS = void 0;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const sync_1 = require("csv-parse/sync");
@@ -38,6 +38,7 @@ function readRows() {
         skip_empty_lines: true,
     });
 }
+exports.readRows = readRows;
 function writeRows(rows) {
     // ✅ Ensure all headers exist in every row
     const normalizedRows = rows.map((row) => {
@@ -90,42 +91,64 @@ function saveGameResult(params) {
     const row = rows.find((r) => r.user_id === params.userId);
     if (!row)
         throw new Error("User not found");
-    let games = {
+    // ✅ STEP 1 — DEFAULT STRUCTURE (only used if no data exists yet)
+    const defaultGames = {
         laundry_sorter: null,
         memory_dialer: null,
         money_manager: null,
         shopping_list_recall: null,
     };
-    if (row.games_response) {
-        games = JSON.parse(row.games_response);
-    }
-    games[params.gameKey] = params.gameResult;
+    // ✅ STEP 2 — LOAD EXISTING DATA IF PRESENT
+    let games = row.games_response && row.games_response.trim() !== ""
+        ? JSON.parse(row.games_response)
+        : { ...defaultGames };
+    // ✅ STEP 3 — NORMALIZE KEYS FROM FRONTEND
+    const normalizedKey = params.gameKey === "shopping_list"
+        ? "shopping_list_recall"
+        : params.gameKey === "memory_dialer_game"
+            ? "memory_dialer"
+            : params.gameKey;
+    // ✅ STEP 4 — UPDATE ONLY THIS GAME (preserve others)
+    games[normalizedKey] = params.gameResult;
+    // ✅ STEP 5 — SAVE BACK TO CSV
     row.games_response = JSON.stringify(games);
     row.last_updated = now;
     writeRows(rows);
+    console.log("🎮 Games after update:", games);
 }
 exports.saveGameResult = saveGameResult;
 function updateEyeTrackingCSV(userId, eyeTrackingResult) {
     const rows = readRows();
     const now = new Date().toISOString();
+    // 🔥 VERY IMPORTANT: FIND EXISTING ROW ONLY
     const row = rows.find((r) => String(r.user_id).trim() === String(userId).trim());
     if (!row) {
         console.log("❌ User not found in CSV:", userId);
         return;
     }
+    // ✅ BUILD EYE DATA
     const eyeData = {
         metrics: eyeTrackingResult.metrics,
         trials: eyeTrackingResult.trials,
         timestamp: now,
     };
-    const jsonResponse = JSON.stringify(eyeData);
-    // ✅ PRINT WHAT WILL BE SAVED IN CSV
-    console.log("🧠 Eye Tracking Data to be saved:");
-    console.log(jsonResponse); // full JSON
-    console.log("📏 JSON length:", jsonResponse.length);
-    row.eye_tracking_response = jsonResponse;
+    row.eye_tracking_response = JSON.stringify(eyeData);
     row.last_updated = now;
     writeRows(rows);
-    console.log("✅ Eye tracking data written to CSV");
+    console.log("✅ Eye tracking UPDATED EXISTING ROW for user:", userId);
 }
 exports.updateEyeTrackingCSV = updateEyeTrackingCSV;
+function isRowComplete(userId) {
+    const rows = readRows();
+    const row = rows.find((r) => r.user_id === userId);
+    if (!row)
+        return false;
+    const games = row.games_response ? JSON.parse(row.games_response) : {};
+    return (!!row.questionnaire_response &&
+        !!row.eye_tracking_response &&
+        !!games.laundry_sorter &&
+        !!games.memory_dialer &&
+        !!games.money_manager &&
+        !!games.shopping_list_recall);
+}
+exports.isRowComplete = isRowComplete;

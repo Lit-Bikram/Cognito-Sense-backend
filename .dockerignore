@@ -1,5 +1,7 @@
 node_modules
 dist
 .env
+.expo
+drive-key.json
 *.md
 .git

@@ -1,38 +1,21 @@
 import { Router } from "express";
-import { saveGameResult } from "../datastore/csvStore";
+import { saveGameResult } from "../datastore/assessmentStore";
+import { requireAuth, AuthedRequest } from "../auth/authMiddleware";
 
 const router = Router();
 
-router.post("/", (req, res) => {
+router.post("/", requireAuth, async (req: AuthedRequest, res) => {
   try {
-    const { userId, gameKey, gameResult } = req.body;
+    const userId = req.user!.userId;
+    const { gameKey, gameResult } = req.body;
 
     console.log("🎮 Game API hit:", userId, gameKey);
 
-    if (!userId || !gameKey || !gameResult) {
+    if (!gameKey || !gameResult) {
       return res.status(400).json({ error: "Invalid payload" });
     }
 
-    // 1️⃣ Keep your existing behavior (local CSV storage)
-    saveGameResult({
-      userId,
-      gameKey,
-      gameResult,
-    });
-
-    // 2️⃣ Update session store + run checker
-    const { userSessions, tryFinalizeRow } = req.app.locals;
-
-    userSessions[userId] = {
-      ...userSessions[userId],
-      games: {
-        gameKey,
-        gameResult,
-      },
-    };
-
-    // 3️⃣ Ask backend: "Are all tasks finished?"
-    tryFinalizeRow(userId);
+    await saveGameResult({ userId, gameKey, gameResult });
 
     res.json({ success: true });
   } catch (err) {

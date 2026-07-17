@@ -3,109 +3,61 @@ dotenv.config();
 
 import express from "express";
 import cors from "cors";
-import fs from "fs";
-import path from "path";
+import { initDb } from "./db/init";
+import { query } from "./db/pool";
+import authRoutes from "./auth/authRoutes";
 import questionnaireRoute from "./routes/questionnaire";
 import gameRoutes from "./routes/game";
 import eyeTrackingRoute from "./routes/eyeTracking";
-import { appendRowToDriveCSV } from "./googleDrive";
+import statusRoute from "./routes/status";
 
 const app = express();
 
-// ✅ TEMPORARY SESSION STORE (one per user)
-const userSessions: Record<string, any> = {};
-
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 
-// Make session store + checker available to routes
-app.locals.userSessions = userSessions;
-app.locals.tryFinalizeRow = tryFinalizeRow;
+// Auth (login / create account)
+app.use("/api/auth", authRoutes);
 
-// Routes
+// Data routes (all JWT-protected, all persisting to Postgres)
 app.use("/api/questionnaire", questionnaireRoute);
 app.use("/api/game", gameRoutes);
 app.use("/api/eye-tracking", eyeTrackingRoute);
+app.use("/api/status", statusRoute);
 
-// ---------------- CHECKER FUNCTION ----------------
-const CSV_PATH = path.join(process.cwd(), "data", "cognito_sense_master.csv");
-
-function tryFinalizeRow(userId: string) {
-  const data = userSessions[userId];
-  if (!data) return;
-
-  // Only finalize when ALL THREE are present
-  if (data.questionnaire && data.games && data.eyeTracking) {
-    const now = new Date().toISOString();
-
-    function csvSafe(json: any) {
-      const text = JSON.stringify(json);
-      return `"${text.replace(/"/g, '""')}"`; // <-- CSV safe format
-    }
-
-    const row = [
-      userId,
-      data.email,
-      data.name,
-      csvSafe(data.questionnaire),
-      csvSafe(data.games),
-      csvSafe(data.eyeTracking),
-      data.q_total_score,
-      data.target_risk_class,
-      data.q_completed_at,
-      data.created_at || now,
-      now,
-    ].join(",");
-
-    // Save locally
-    fs.appendFileSync(CSV_PATH, row + "\n");
-
-    // Upload to Google Drive
-    appendRowToDriveCSV(row);
-
-    console.log("✅ FINAL ROW SAVED FOR:", userId);
-
-    // Prevent duplicate rows
-    delete userSessions[userId];
-  }
-}
-// -------------------------------------------------
-
-app.get("/api/view-csv", (req, res) => {
+// Admin: dump all assessments joined with users (JSON).
+app.get("/api/view-data", async (_req, res) => {
   try {
-    const csvPath = path.join(
-      process.cwd(),
-      "data",
-      "cognito_sense_master.csv",
+    const result = await query(
+      `SELECT u.id AS user_id, u.email, u.name,
+              a.questionnaire_response, a.games_response, a.eye_tracking_response,
+              a.q_total_score, a.target_risk_class, a.q_completed_at,
+              a.created_at, a.last_updated
+         FROM users u
+         LEFT JOIN assessments a ON a.user_id = u.id
+        ORDER BY u.id`,
     );
-
-    if (!fs.existsSync(csvPath)) {
-      return res.status(404).json({
-        error: "CSV file not found",
-        pathTried: csvPath,
-      });
-    }
-
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader(
-      "Content-Disposition",
-      "inline; filename=cognito_sense_master.csv",
-    );
-
-    const fileData = fs.readFileSync(csvPath, "utf8");
-    res.send(fileData);
+    res.json(result.rows);
   } catch (err) {
-    console.error("CSV read error:", err);
-    res.status(500).json({ error: "Failed to read CSV file" });
+    console.error("view-data error:", err);
+    res.status(500).json({ error: "Failed to read data" });
   }
 });
 
 // Health check
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.send("✅ CognitoSense Backend is Running");
 });
 
-const PORT = 4000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("✅ Backend running on port", PORT);
-});
+const PORT = Number(process.env.PORT || 4000);
+
+initDb()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log("✅ Backend running on port", PORT);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Failed to initialize database — server not started:", err);
+    process.exit(1);
+  });

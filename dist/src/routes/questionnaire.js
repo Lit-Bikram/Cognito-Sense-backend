@@ -1,29 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const csvStore_1 = require("../datastore/csvStore");
+const assessmentStore_1 = require("../datastore/assessmentStore");
+const pool_1 = require("../db/pool");
+const authMiddleware_1 = require("../auth/authMiddleware");
 const router = (0, express_1.Router)();
-router.post("/", (req, res) => {
+// Identity comes from the JWT (requireAuth) — not from the request body.
+router.post("/", authMiddleware_1.requireAuth, async (req, res) => {
     try {
-        console.log("✅ Questionnaire API hit");
-        console.log("📦 Body received:", req.body);
-        const { userId, email, name, questionnaireResponse, totalScore, targetClass, } = req.body;
-        // 1️⃣ Keep your existing CSV behavior exactly as it is
-        (0, csvStore_1.saveQuestionnaire)(req.body);
-        // 2️⃣ Update session store + run checker
-        const { userSessions, tryFinalizeRow } = req.app.locals;
-        userSessions[userId] = {
-            ...userSessions[userId],
-            email,
-            name,
-            questionnaire: questionnaireResponse,
-            q_total_score: totalScore,
-            target_risk_class: targetClass,
-            q_completed_at: new Date().toISOString(),
-            created_at: userSessions[userId]?.created_at || new Date().toISOString(),
-        };
-        // 3️⃣ Ask backend: "Is everything finished yet?"
-        tryFinalizeRow(userId);
+        const userId = req.user.userId;
+        const { name, questionnaireResponse, totalScore, targetClass } = req.body;
+        await (0, assessmentStore_1.saveQuestionnaire)({
+            userId,
+            questionnaireResponse,
+            totalScore,
+            targetClass,
+        });
+        // Keep the user's display name up to date if the questionnaire collected it.
+        if (name && String(name).trim()) {
+            await (0, pool_1.query)("UPDATE users SET name = $1, updated_at = now() WHERE id = $2", [String(name).trim(), userId]);
+        }
         res.json({ success: true });
     }
     catch (error) {

@@ -7,84 +7,52 @@ const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
+const init_1 = require("./db/init");
+const pool_1 = require("./db/pool");
+const authRoutes_1 = __importDefault(require("./auth/authRoutes"));
 const questionnaire_1 = __importDefault(require("./routes/questionnaire"));
 const game_1 = __importDefault(require("./routes/game"));
 const eyeTracking_1 = __importDefault(require("./routes/eyeTracking"));
-const googleDrive_1 = require("./googleDrive");
+const status_1 = __importDefault(require("./routes/status"));
 const app = (0, express_1.default)();
-// ✅ TEMPORARY SESSION STORE (one per user)
-const userSessions = {};
 app.use((0, cors_1.default)());
-app.use(express_1.default.json());
-// Make session store + checker available to routes
-app.locals.userSessions = userSessions;
-app.locals.tryFinalizeRow = tryFinalizeRow;
-// Routes
+app.use(express_1.default.json({ limit: "5mb" }));
+// Auth (login / create account)
+app.use("/api/auth", authRoutes_1.default);
+// Data routes (all JWT-protected, all persisting to Postgres)
 app.use("/api/questionnaire", questionnaire_1.default);
 app.use("/api/game", game_1.default);
 app.use("/api/eye-tracking", eyeTracking_1.default);
-// ---------------- CHECKER FUNCTION ----------------
-const CSV_PATH = path_1.default.join(process.cwd(), "data", "cognito_sense_master.csv");
-function tryFinalizeRow(userId) {
-    const data = userSessions[userId];
-    if (!data)
-        return;
-    // Only finalize when ALL THREE are present
-    if (data.questionnaire && data.games && data.eyeTracking) {
-        const now = new Date().toISOString();
-        function csvSafe(json) {
-            const text = JSON.stringify(json);
-            return `"${text.replace(/"/g, '""')}"`; // <-- CSV safe format
-        }
-        const row = [
-            userId,
-            data.email,
-            data.name,
-            csvSafe(data.questionnaire),
-            csvSafe(data.games),
-            csvSafe(data.eyeTracking),
-            data.q_total_score,
-            data.target_risk_class,
-            data.q_completed_at,
-            data.created_at || now,
-            now,
-        ].join(",");
-        // Save locally
-        fs_1.default.appendFileSync(CSV_PATH, row + "\n");
-        // Upload to Google Drive
-        (0, googleDrive_1.appendRowToDriveCSV)(row);
-        console.log("✅ FINAL ROW SAVED FOR:", userId);
-        // Prevent duplicate rows
-        delete userSessions[userId];
-    }
-}
-// -------------------------------------------------
-app.get("/api/view-csv", (req, res) => {
+app.use("/api/status", status_1.default);
+// Admin: dump all assessments joined with users (JSON).
+app.get("/api/view-data", async (_req, res) => {
     try {
-        const csvPath = path_1.default.join(process.cwd(), "data", "cognito_sense_master.csv");
-        if (!fs_1.default.existsSync(csvPath)) {
-            return res.status(404).json({
-                error: "CSV file not found",
-                pathTried: csvPath,
-            });
-        }
-        res.setHeader("Content-Type", "text/csv");
-        res.setHeader("Content-Disposition", "inline; filename=cognito_sense_master.csv");
-        const fileData = fs_1.default.readFileSync(csvPath, "utf8");
-        res.send(fileData);
+        const result = await (0, pool_1.query)(`SELECT u.id AS user_id, u.email, u.name,
+              a.questionnaire_response, a.games_response, a.eye_tracking_response,
+              a.q_total_score, a.target_risk_class, a.q_completed_at,
+              a.created_at, a.last_updated
+         FROM users u
+         LEFT JOIN assessments a ON a.user_id = u.id
+        ORDER BY u.id`);
+        res.json(result.rows);
     }
     catch (err) {
-        console.error("CSV read error:", err);
-        res.status(500).json({ error: "Failed to read CSV file" });
+        console.error("view-data error:", err);
+        res.status(500).json({ error: "Failed to read data" });
     }
 });
 // Health check
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
     res.send("✅ CognitoSense Backend is Running");
 });
-const PORT = 4000;
-app.listen(PORT, "0.0.0.0", () => {
-    console.log("✅ Backend running on port", PORT);
+const PORT = Number(process.env.PORT || 4000);
+(0, init_1.initDb)()
+    .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+        console.log("✅ Backend running on port", PORT);
+    });
+})
+    .catch((err) => {
+    console.error("❌ Failed to initialize database — server not started:", err);
+    process.exit(1);
 });

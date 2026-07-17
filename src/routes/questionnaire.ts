@@ -1,42 +1,30 @@
 import { Router } from "express";
-import { saveQuestionnaire } from "../datastore/csvStore";
+import { saveQuestionnaire } from "../datastore/assessmentStore";
+import { query } from "../db/pool";
+import { requireAuth, AuthedRequest } from "../auth/authMiddleware";
 
 const router = Router();
 
-router.post("/", (req, res) => {
+// Identity comes from the JWT (requireAuth) — not from the request body.
+router.post("/", requireAuth, async (req: AuthedRequest, res) => {
   try {
-    console.log("✅ Questionnaire API hit");
-    console.log("📦 Body received:", req.body);
+    const userId = req.user!.userId;
+    const { name, questionnaireResponse, totalScore, targetClass } = req.body;
 
-    const {
+    await saveQuestionnaire({
       userId,
-      email,
-      name,
       questionnaireResponse,
       totalScore,
       targetClass,
-    } = req.body;
+    });
 
-    // 1️⃣ Keep your existing CSV behavior exactly as it is
-    saveQuestionnaire(req.body);
-
-    // 2️⃣ Update session store + run checker
-    const { userSessions, tryFinalizeRow } = req.app.locals;
-
-    userSessions[userId] = {
-      ...userSessions[userId],
-      email,
-      name,
-      questionnaire: questionnaireResponse,
-      q_total_score: totalScore,
-      target_risk_class: targetClass,
-      q_completed_at: new Date().toISOString(),
-      created_at:
-        userSessions[userId]?.created_at || new Date().toISOString(),
-    };
-
-    // 3️⃣ Ask backend: "Is everything finished yet?"
-    tryFinalizeRow(userId);
+    // Keep the user's display name up to date if the questionnaire collected it.
+    if (name && String(name).trim()) {
+      await query(
+        "UPDATE users SET name = $1, updated_at = now() WHERE id = $2",
+        [String(name).trim(), userId],
+      );
+    }
 
     res.json({ success: true });
   } catch (error) {

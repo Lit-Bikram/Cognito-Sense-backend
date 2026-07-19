@@ -54,21 +54,19 @@ app.get("/", (_req, res) => {
   res.send("✅ CognitoSense Backend is Running");
 });
 
-app.listen(PORT, async () => {
-    console.log(`Server running on port ${PORT}`);
-
+async function startServer(): Promise<void> {
+  try {
+    await initDb();
     await testDatabaseConnection();
-});
+    await initializeModel();
 
-initDb()
-.then(() => {
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log("✅ Backend running on port", PORT);
-  });
-  })
-  .catch((err) => {
-    console.error("❌ Failed to initialize database — server not started:", err);
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log("✅ Backend running on port", PORT);
+    });
+  } catch (err) {
+    console.error("❌ Failed to initialize backend — server not started:", err);
     process.exit(1);
-  });
-  
-initializeModel();
+  }
+}
+
+void startServer();

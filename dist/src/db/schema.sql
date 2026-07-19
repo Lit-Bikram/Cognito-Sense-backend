@@ -26,7 +26,13 @@ CREATE TABLE IF NOT EXISTS assessments (
   target_risk_class      INTEGER,
   q_completed_at         TIMESTAMPTZ,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_updated           TIMESTAMPTZ NOT NULL DEFAULT now()
+  last_updated           TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  predicted_class INTEGER,
+  prediction_confidence DOUBLE PRECISION,
+  prediction_probabilities JSONB,
+  risk_score DOUBLE PRECISION,
+  predicted_at TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);

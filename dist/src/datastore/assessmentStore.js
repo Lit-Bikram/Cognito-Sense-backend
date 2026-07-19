@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.missingTasks = exports.getStatus = exports.isRowComplete = exports.getAssessment = exports.updateEyeTracking = exports.saveGameResult = exports.saveQuestionnaire = void 0;
+exports.savePrediction = exports.missingTasks = exports.getStatus = exports.isRowComplete = exports.getAssessment = exports.updateEyeTracking = exports.saveGameResult = exports.saveQuestionnaire = void 0;
 const pool_1 = require("../db/pool");
 // Latest-only store: exactly one `assessments` row per user, overwritten in
 // place on each submission (mirrors the old CSV behaviour, now in Postgres).
@@ -122,3 +122,26 @@ function missingTasks(row) {
     return missing;
 }
 exports.missingTasks = missingTasks;
+/* ================= MODEL PREDICTION ================= */
+async function savePrediction(params) {
+    const test = await (0, pool_1.query)(`SELECT predicted_class FROM assessments LIMIT 1`);
+    console.log(test.rows);
+    await (0, pool_1.query)(`
+        UPDATE assessments
+        SET
+            predicted_class = $2,
+            prediction_confidence = $3,
+            prediction_probabilities = $4::jsonb,
+            risk_score = $5,
+            predicted_at = NOW(),
+            last_updated = NOW()
+        WHERE user_id = $1
+        `, [
+        params.userId,
+        params.predictedClass,
+        params.confidence,
+        JSON.stringify(params.probabilities),
+        params.riskScore
+    ]);
+}
+exports.savePrediction = savePrediction;

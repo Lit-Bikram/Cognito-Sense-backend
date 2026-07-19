@@ -14,7 +14,11 @@ const questionnaire_1 = __importDefault(require("./routes/questionnaire"));
 const game_1 = __importDefault(require("./routes/game"));
 const eyeTracking_1 = __importDefault(require("./routes/eyeTracking"));
 const status_1 = __importDefault(require("./routes/status"));
+const database_1 = require("./config/database");
+const modelLoader_1 = require("./ml/modelLoader");
+const result_1 = __importDefault(require("./routes/result"));
 const app = (0, express_1.default)();
+const PORT = Number(process.env.PORT || 4000);
 app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: "5mb" }));
 // Auth (login / create account)
@@ -24,16 +28,17 @@ app.use("/api/questionnaire", questionnaire_1.default);
 app.use("/api/game", game_1.default);
 app.use("/api/eye-tracking", eyeTracking_1.default);
 app.use("/api/status", status_1.default);
+app.use("/api/result", result_1.default);
 // Admin: dump all assessments joined with users (JSON).
 app.get("/api/view-data", async (_req, res) => {
     try {
         const result = await (0, pool_1.query)(`SELECT u.id AS user_id, u.email, u.name,
-              a.questionnaire_response, a.games_response, a.eye_tracking_response,
-              a.q_total_score, a.target_risk_class, a.q_completed_at,
-              a.created_at, a.last_updated
-         FROM users u
-         LEFT JOIN assessments a ON a.user_id = u.id
-        ORDER BY u.id`);
+      a.questionnaire_response, a.games_response, a.eye_tracking_response,
+      a.q_total_score, a.target_risk_class, a.q_completed_at,
+      a.created_at, a.last_updated
+      FROM users u
+      LEFT JOIN assessments a ON a.user_id = u.id
+      ORDER BY u.id`);
         res.json(result.rows);
     }
     catch (err) {
@@ -45,14 +50,18 @@ app.get("/api/view-data", async (_req, res) => {
 app.get("/", (_req, res) => {
     res.send("✅ CognitoSense Backend is Running");
 });
-const PORT = Number(process.env.PORT || 4000);
-(0, init_1.initDb)()
-    .then(() => {
-    app.listen(PORT, "0.0.0.0", () => {
-        console.log("✅ Backend running on port", PORT);
-    });
-})
-    .catch((err) => {
-    console.error("❌ Failed to initialize database — server not started:", err);
-    process.exit(1);
-});
+async function startServer() {
+    try {
+        await (0, init_1.initDb)();
+        await (0, database_1.testDatabaseConnection)();
+        await (0, modelLoader_1.initializeModel)();
+        app.listen(PORT, "0.0.0.0", () => {
+            console.log("✅ Backend running on port", PORT);
+        });
+    }
+    catch (err) {
+        console.error("❌ Failed to initialize database — server not started:", err);
+        process.exit(1);
+    }
+}
+void startServer();

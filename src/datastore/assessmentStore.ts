@@ -156,3 +156,43 @@ export function missingTasks(row: any): string[] {
   }
   return missing;
 }
+
+
+
+/* ================= MODEL PREDICTION ================= */
+
+export async function savePrediction(params: {
+    userId: number;
+    predictedClass: number;
+    confidence: number;
+    probabilities: number[];
+    riskScore: number;
+}) {
+    const test = await query(
+      `SELECT predicted_class FROM assessments LIMIT 1`
+    );
+
+    console.log(test.rows);
+
+    await query(
+        `
+        UPDATE assessments
+        SET
+            predicted_class = $2,
+            prediction_confidence = $3,
+            prediction_probabilities = $4::jsonb,
+            risk_score = $5,
+            predicted_at = NOW(),
+            last_updated = NOW()
+        WHERE user_id = $1
+        `,
+        [
+            params.userId,
+            params.predictedClass,
+            params.confidence,
+            JSON.stringify(params.probabilities),
+            params.riskScore
+        ]
+    );
+
+}

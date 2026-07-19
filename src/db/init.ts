@@ -21,5 +21,20 @@ export async function initDb() {
 
   const sql = fs.readFileSync(schemaPath, "utf8");
   await pool.query(sql);
+  const cols = await pool.query(`
+SELECT column_name
+FROM information_schema.columns
+WHERE table_name = 'assessments'
+ORDER BY ordinal_position
+`);
+
+  console.log("Assessment columns:");
+  console.table(cols.rows);
+
+  const dbInfo = await pool.query(`
+SELECT current_database(), current_schema(), current_user
+`);
+
+  console.log(dbInfo.rows[0]);
   console.log("✅ Database schema ensured (users, assessments)");
 }
